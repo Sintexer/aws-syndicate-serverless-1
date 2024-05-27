@@ -15,7 +15,7 @@ import java.util.Map;
 	roleName = "api_handler-role",
 	logsExpiration = RetentionSetting.SYNDICATE_ALIASES_SPECIFIED
 )
-@EnvironmentVariable(key = "TABLE_NAME", value = "${targetTable}")
+@EnvironmentVariable(key = "TABLE_NAME", value = "${target_table}")
 public class ApiHandler implements RequestHandler<Map<String, Object>, Map<String, Object>> {
 
 	private static final String EVENTS_TABLE = "Events";
