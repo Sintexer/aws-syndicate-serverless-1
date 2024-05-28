@@ -30,8 +30,11 @@ public class UuidGenerator implements RequestHandler<Object, Void> {
 
     public Void handleRequest(Object request, Context context) {
         // Generate 10 random UUIDs
-        String uuids = generateUUIDs(10);
+        String uuids = "{'ids': [";
+        uuids += generateUUIDs(10);
+        uuids += "]}";
         System.out.println("Generated UUIDs: " + uuids);
+
 
         // Create the file name
         String fileName = getFileName();
@@ -51,8 +54,8 @@ public class UuidGenerator implements RequestHandler<Object, Void> {
 
     private static String generateUUIDs(int number) {
         return IntStream.range(0, Math.max(1, number))
-                .mapToObj(i -> UUID.randomUUID().toString())
-                .collect(Collectors.joining("\n"));
+                .mapToObj(i -> "'" + UUID.randomUUID() + "'")
+                .collect(Collectors.joining(",        \n"));
     }
 
     private String getBucketName() {
