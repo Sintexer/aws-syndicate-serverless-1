@@ -315,8 +315,9 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
     }
 
     private List<Map<String, Object>> getReservationByDate(int tableNumber, String date) {
+        BigDecimal x = new BigDecimal(tableNumber);
         return getAllReservationsList().stream().filter(reservation ->
-                tableNumber == (int) reservation.get("tableNumber") && reservation.get(date).equals(date))
+                reservation.get("tableNumber").equals(x) && reservation.get(date).equals(date))
                 .collect(Collectors.toList());
     }
 
