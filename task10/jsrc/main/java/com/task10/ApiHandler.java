@@ -21,13 +21,10 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.document.DynamoDB;
 import com.amazonaws.services.dynamodbv2.document.Item;
 import com.amazonaws.services.dynamodbv2.document.ItemCollection;
-import com.amazonaws.services.dynamodbv2.document.QueryOutcome;
 import com.amazonaws.services.dynamodbv2.document.ScanOutcome;
 import com.amazonaws.services.dynamodbv2.document.Table;
 import com.amazonaws.services.dynamodbv2.document.internal.IteratorSupport;
-import com.amazonaws.services.dynamodbv2.document.spec.QuerySpec;
 import com.amazonaws.services.dynamodbv2.document.spec.ScanSpec;
-import com.amazonaws.services.dynamodbv2.document.utils.ValueMap;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
@@ -42,7 +39,6 @@ import com.syndicate.deployment.model.RetentionSetting;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -104,7 +100,7 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
     }
 
     private APIGatewayProxyResponseEvent signup(String body, Context context) {
-        Map<String, String> user = readJsonBody(body);
+        Map<String, Object> user = readJsonBody(body);
         validateSignup(user);
 
         PoolIds poolsIds = getUserPoolIdAndClientId(CLIENT_NAME, context);
@@ -112,21 +108,21 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
 
         AdminCreateUserRequest request = new AdminCreateUserRequest()
                 .withUserPoolId(poolsIds.getPoolId())
-                .withUsername(user.get("email"))
+                .withUsername((String) user.get("email"))
                 .withUserAttributes(
-                        new AttributeType().withName("email").withValue(user.get("email")),
-                        new AttributeType().withName("given_name").withValue(user.get("firstName")),
-                        new AttributeType().withName("family_name").withValue(user.get("lastName"))
+                        new AttributeType().withName("email").withValue((String) user.get("email")),
+                        new AttributeType().withName("given_name").withValue((String) user.get("firstName")),
+                        new AttributeType().withName("family_name").withValue((String) user.get("lastName"))
                 )
-                .withTemporaryPassword(user.get("password"))
+                .withTemporaryPassword((String) user.get("password"))
                 .withMessageAction("SUPPRESS");
 
         AdminCreateUserResult result = cognitoClient.adminCreateUser(request);
         System.out.println("authresult: " + result);
         AdminSetUserPasswordRequest passwordRequest = new AdminSetUserPasswordRequest()
                 .withUserPoolId(poolsIds.getPoolId())
-                .withUsername(user.get("email"))
-                .withPassword(user.get("password"))
+                .withUsername((String) user.get("email"))
+                .withPassword((String) user.get("password"))
                 .withPermanent(true);
         cognitoClient.adminSetUserPassword(passwordRequest);
 
@@ -135,24 +131,24 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
         return buildOkResponse(Collections.emptyMap());
     }
 
-    private void validateSignup(Map<String, String> user) {
+    private void validateSignup(Map<String, Object> user) {
         if (user.get("email") == null || user.get("password") == null || user.get("firstName") == null || user.get("lastName") == null) {
             throw new IllegalArgumentException("Missing required fields");
         }
-        if (!user.get("email").contains("@") || !user.get("email").contains(".")) {
+        if (!((String) user.get("email")).contains("@") || !((String) user.get("email")).contains(".")) {
             throw new IllegalArgumentException("Invalid email address");
         }
-        if (user.get("password").length() < 6) {
+        if (((String) user.get("password")).length() < 6) {
             throw new IllegalArgumentException("Password must be at least 6 characters long");
         }
     }
 
     private APIGatewayProxyResponseEvent signin(String body, Context context) {
-        Map<String, String> user = readJsonBody(body);
+        Map<String, Object> user = readJsonBody(body);
 
         Map<String, String> authParams = new HashMap<>();
-        authParams.put("USERNAME", user.get("email"));
-        authParams.put("PASSWORD", user.get("password"));
+        authParams.put("USERNAME", (String) user.get("email"));
+        authParams.put("PASSWORD", (String) user.get("password"));
 
         PoolIds poolsIds = getUserPoolIdAndClientId(CLIENT_NAME, context);
         System.out.println("pool ids: " + poolsIds);
@@ -229,19 +225,19 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
         return map;
     }
 
-    private APIGatewayProxyResponseEvent createTable(Map<String, String> body) {
-        int id = Integer.parseInt(body.get("id"));
-        int number = Integer.parseInt(body.get("number"));
-        int places = Integer.parseInt(body.get("places"));
-        boolean isVip = Boolean.parseBoolean(body.get("isVip"));
-        Integer minOrder = body.get("minOrder") != null ? Integer.parseInt(body.get("minOrder")) : null;
+    private APIGatewayProxyResponseEvent createTable(Map<String, Object> body) {
+        int id = (int) body.get("id");
+        int number = (int) body.get("number");
+        int places = (int) body.get("places");
+        boolean isVip = (boolean) body.get("isVip");
+        Integer minOrder = body.get("minOrder") != null ? (int) body.get("minOrder") : null;
 
         Item item = createItem(id, number, places, isVip, minOrder);
 
         Table table = dynamoDB.getTable(getTableTables());
         table.putItem(item);
 
-        return buildOkResponse();
+        return buildOkResponse(Map.of("id", id));
     }
 
     private static Item createItem(int id, int number, int places, boolean isVip, Integer minOrder) {
@@ -270,14 +266,14 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
         return table.getItem("id", tableId);
     }
 
-    private APIGatewayProxyResponseEvent createReservation(Map<String, String> body) {
+    private APIGatewayProxyResponseEvent createReservation(Map<String, Object> body) {
 
-        int tableNumber = Integer.parseInt(body.get("tableNumber"));
-        String clientName = body.get("clientName");
-        String phoneNumber = body.get("phoneNumber");
-        String date = body.get("date");
-        String slotTimeStart = body.get("slotTimeStart");
-        String slotTimeEnd = body.get("slotTimeEnd");
+        int tableNumber = (int) body.get("tableNumber");
+        String clientName = (String) body.get("clientName");
+        String phoneNumber = (String) body.get("phoneNumber");
+        String date = (String) body.get("date");
+        String slotTimeStart = (String) body.get("slotTimeStart");
+        String slotTimeEnd = (String) body.get("slotTimeEnd");
 
         validateReservation(tableNumber, date, slotTimeStart, slotTimeEnd);
 
@@ -381,7 +377,7 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, String> readJsonBody(String json) {
+    private Map<String, Object> readJsonBody(String json) {
         try {
             return mapper.readValue(json, Map.class);
         } catch (JsonProcessingException e) {
