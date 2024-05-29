@@ -36,6 +36,7 @@ import com.syndicate.deployment.annotations.environment.EnvironmentVariables;
 import com.syndicate.deployment.annotations.lambda.LambdaHandler;
 import com.syndicate.deployment.model.RetentionSetting;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -209,11 +210,11 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
         IteratorSupport<Item, ScanOutcome> iterator = table.scan(scanSpec).iterator();
         iterator.forEachRemaining(items::add);
         return items.stream()
-                .map(ApiHandler::mapToMap)
+                .map(ApiHandler::mapTableToMap)
                 .collect(Collectors.toList());
     }
 
-    private static Map<String, Object> mapToMap(Item item) {
+    private static Map<String, Object> mapTableToMap(Item item) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", item.getNumber("id"));
         map.put("number", item.getNumber("number"));
@@ -258,7 +259,7 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
         if (item == null) {
             return buildBadRequestResponse("Table not found");
         }
-        return buildOkResponse(item);
+        return buildOkResponse(mapTableToMap(item));
     }
 
     private Item getTableOrNull(int tableId) {
@@ -307,9 +308,10 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
     }
 
     private Map<String, Object> getTableByTableNumberOrNull(int tableNumber) {
+        BigDecimal x = new BigDecimal(tableNumber);
         return getAllTables().stream()
-                .filter(table -> ((int)table.get("number")) == tableNumber)
-                .findFirst().orElse(null);
+                .filter(table -> table.get("number").equals(x))
+                    .findFirst().orElse(null);
     }
 
     private List<Map<String, Object>> getReservationByDate(int tableNumber, String date) {
