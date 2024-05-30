@@ -295,11 +295,111 @@ public class ApiHandler implements RequestHandler<APIGatewayProxyRequestEvent, A
         return buildOkResponse(Map.of("reservationId", id));
     }
 
-	public Map<String, Object> handleRequest(Object request, Context context) {
-		System.out.println("Hello from lambda");
-		Map<String, Object> resultMap = new HashMap<String, Object>();
-		resultMap.put("statusCode", 200);
-		resultMap.put("body", "Hello from Lambda");
-		return resultMap;
-	}
+    private void validateReservation(int tableNumber, String date, String slotTimeStart, String slotTimeEnd) {
+        if (getTableByTableNumberOrNull(tableNumber) == null) {
+            throw new IllegalArgumentException("table not found");
+        }
+        List<Map<String, Object>> otherReservations = getReservationByDate(tableNumber, date);
+        for (Map<String, Object> reservation : otherReservations) {
+            String existingStart = (String) reservation.get("slotTimeStart");
+            String existingEnd = (String) reservation.get("slotTimeEnd");
+            if ((slotTimeStart.compareTo(existingEnd) < 0) && (slotTimeEnd.compareTo(existingStart) > 0)) {
+                throw new IllegalArgumentException("time slot overlaps with an existing reservation");
+            }
+        }
+    }
+
+    private Map<String, Object> getTableByTableNumberOrNull(int tableNumber) {
+        BigDecimal x = new BigDecimal(tableNumber);
+        return getAllTables().stream()
+                .filter(table -> table.get("number").equals(x))
+                .findFirst().orElse(null);
+    }
+
+    private List<Map<String, Object>> getReservationByDate(int tableNumber, String date) {
+        BigDecimal x = new BigDecimal(tableNumber);
+        return getAllReservationsList().stream().filter(reservation ->
+                        reservation.get("tableNumber").equals(x) && reservation.get(date).equals(date))
+                .collect(Collectors.toList());
+    }
+
+    private APIGatewayProxyResponseEvent getAllReservations() {
+        return buildOkResponse(Map.of("reservations", getAllReservationsList()));
+    }
+
+    private List<Map<String, Object>> getAllReservationsList() {
+        Table table = dynamoDB.getTable(getTableReservations());
+        ScanSpec scanSpec = new ScanSpec();
+        ItemCollection<ScanOutcome> items = table.scan(scanSpec);
+        List<Map<String, Object>> reservations = new ArrayList<>();
+        for (Item item : items) {
+            Map<String, Object> reservation = mapReservationToMap(item);
+            reservations.add(reservation);
+        }
+        return reservations;
+    }
+
+    private static Map<String, Object> mapReservationToMap(Item item) {
+        Map<String, Object> reservation = new HashMap<>();
+        reservation.put("tableNumber", item.getNumber("tableNumber"));
+        reservation.put("clientName", item.getString("clientName"));
+        reservation.put("phoneNumber", item.getString("phoneNumber"));
+        reservation.put("date", item.getString("date"));
+        reservation.put("slotTimeStart", item.getString("slotTimeStart"));
+        reservation.put("slotTimeEnd", item.getString("slotTimeEnd"));
+        return reservation;
+    }
+
+    private APIGatewayProxyResponseEvent buildOkResponse() {
+        return buildOkResponse(Collections.emptyMap());
+    }
+
+    private APIGatewayProxyResponseEvent buildOkResponse(Object response) {
+        return buildResponse(200, convertToJson(response));
+    }
+
+    private APIGatewayProxyResponseEvent buildBadRequestResponse(String message) {
+        return buildBadRequestResponse(Map.of("message", Objects.requireNonNullElse(message, "kek")));
+    }
+
+    private APIGatewayProxyResponseEvent buildBadRequestResponse(Map<String, String> response) {
+        return buildResponse(400, convertToJson(response));
+    }
+
+    private APIGatewayProxyResponseEvent buildResponse(int statusCode, String response) {
+        return new APIGatewayProxyResponseEvent()
+                .withStatusCode(statusCode)
+                .withHeaders(Map.of("Content-Type", "application/json"))
+                .withBody(response);
+    }
+
+    private String convertToJson(Object response) {
+        try {
+            return mapper.writeValueAsString(response);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readJsonBody(String json) {
+        try {
+            return mapper.readValue(json, Map.class);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private String getTableTables() {
+        return System.getenv("TABLE_TABLES");
+    }
+
+    private String getTableReservations() {
+        return System.getenv("TABLE_RESERVATIONS");
+    }
+
+    private String getUserPool() {
+        return System.getenv("USERPOOL");
+    }
+
 }
